@@ -7,9 +7,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 /** 학생 조회 또는 신규 등록 */
 export async function findOrCreateStudent({ grade, class: cls, group_num, number, name }) {
-  // 먼저 기존 학생 검색
   const { data: existing } = await supabase
-    .from('students')
+    .from('inf_students')
     .select('*')
     .eq('grade', grade)
     .eq('class', cls)
@@ -19,9 +18,8 @@ export async function findOrCreateStudent({ grade, class: cls, group_num, number
 
   if (existing) return { data: existing, error: null }
 
-  // 없으면 새로 생성
   const { data, error } = await supabase
-    .from('students')
+    .from('inf_students')
     .insert({ grade, class: cls, group_num, number, name })
     .select()
     .single()
@@ -32,7 +30,7 @@ export async function findOrCreateStudent({ grade, class: cls, group_num, number
 /** 활동 내용 저장 (upsert) */
 export async function saveSubmission({ studentId, sessionNumber, activityId, content }) {
   const { data, error } = await supabase
-    .from('submissions')
+    .from('inf_submissions')
     .upsert(
       {
         student_id: studentId,
@@ -52,7 +50,7 @@ export async function saveSubmission({ studentId, sessionNumber, activityId, con
 /** 학생의 모든 제출 내용 조회 */
 export async function getStudentSubmissions(studentId) {
   const { data, error } = await supabase
-    .from('submissions')
+    .from('inf_submissions')
     .select('*')
     .eq('student_id', studentId)
     .order('session_number', { ascending: true })
@@ -63,7 +61,7 @@ export async function getStudentSubmissions(studentId) {
 /** 차시별 완료 현황 조회 */
 export async function getSessionProgress(studentId) {
   const { data, error } = await supabase
-    .from('session_progress')
+    .from('inf_session_progress')
     .select('*')
     .eq('student_id', studentId)
 
@@ -73,7 +71,7 @@ export async function getSessionProgress(studentId) {
 /** 차시 완료 처리 */
 export async function markSessionComplete(studentId, sessionNumber) {
   const { data, error } = await supabase
-    .from('session_progress')
+    .from('inf_session_progress')
     .upsert(
       { student_id: studentId, session_number: sessionNumber },
       { onConflict: 'student_id,session_number' }
@@ -87,7 +85,7 @@ export async function markSessionComplete(studentId, sessionNumber) {
 /** 미디어 파일 업로드 (사진, 음성) */
 export async function uploadMedia(studentId, sessionNumber, activityId, file, fileType) {
   const ext = fileType === 'audio' ? 'webm' : file.name?.split('.').pop() || 'jpg'
-  const path = `${studentId}/${sessionNumber}/${activityId}_${Date.now()}.${ext}`
+  const path = `infection/${studentId}/${sessionNumber}/${activityId}_${Date.now()}.${ext}`
 
   const { data: uploadData, error: uploadError } = await supabase.storage
     .from('media')
@@ -98,7 +96,7 @@ export async function uploadMedia(studentId, sessionNumber, activityId, file, fi
   const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(path)
 
   const { data, error } = await supabase
-    .from('media_uploads')
+    .from('inf_media_uploads')
     .insert({
       student_id: studentId,
       session_number: sessionNumber,
@@ -115,7 +113,7 @@ export async function uploadMedia(studentId, sessionNumber, activityId, file, fi
 /** 학생 미디어 조회 */
 export async function getStudentMedia(studentId) {
   const { data, error } = await supabase
-    .from('media_uploads')
+    .from('inf_media_uploads')
     .select('*')
     .eq('student_id', studentId)
     .order('created_at', { ascending: true })
@@ -126,26 +124,32 @@ export async function getStudentMedia(studentId) {
 /** [교사용] 전체 학생 제출 현황 */
 export async function getAllStudents() {
   const { data, error } = await supabase
-    .from('students')
+    .from('inf_students')
     .select(`
       *,
-      submissions(count),
-      session_progress(session_number)
+      inf_submissions(count),
+      inf_session_progress(session_number)
     `)
     .order('class', { ascending: true })
     .order('number', { ascending: true })
 
-  return { data, error }
+  // 호환성을 위해 키 이름 매핑
+  const formatted = data?.map(s => ({
+    ...s,
+    submissions: s.inf_submissions,
+    session_progress: s.inf_session_progress,
+  }))
+
+  return { data: formatted, error }
 }
 
 /** [교사용] 특정 학생 전체 제출 내용 */
 export async function getStudentFullData(studentId) {
   const [{ data: student }, { data: submissions }, { data: media }] = await Promise.all([
-    supabase.from('students').select('*').eq('id', studentId).single(),
-    supabase.from('submissions').select('*').eq('student_id', studentId).order('session_number'),
-    supabase.from('media_uploads').select('*').eq('student_id', studentId),
+    supabase.from('inf_students').select('*').eq('id', studentId).single(),
+    supabase.from('inf_submissions').select('*').eq('student_id', studentId).order('session_number'),
+    supabase.from('inf_media_uploads').select('*').eq('student_id', studentId),
   ])
 
   return { student, submissions, media }
 }
-

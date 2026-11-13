@@ -88,12 +88,12 @@ export async function uploadMedia(studentId, sessionNumber, activityId, file, fi
   const path = `infection/${studentId}/${sessionNumber}/${activityId}_${Date.now()}.${ext}`
 
   const { data: uploadData, error: uploadError } = await supabase.storage
-    .from('media')
+    .from('2634infection')
     .upload(path, file, { contentType: file.type, upsert: true })
 
   if (uploadError) return { data: null, error: uploadError }
 
-  const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(path)
+  const { data: { publicUrl } } = supabase.storage.from('2634infection').getPublicUrl(path)
 
   const { data, error } = await supabase
     .from('inf_media_uploads')
